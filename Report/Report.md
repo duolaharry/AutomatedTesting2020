@@ -8,7 +8,7 @@
 
 ***
 
-
+dot -Tpdf E:\学习\自动化测试\AutomatedTesting2020\Report\method-4-NextDay.dot -o E:\学习\自动化测试\AutomatedTesting2020\Report\method-4-NextDay.pdf
 
 
 
