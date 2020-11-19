@@ -32,29 +32,28 @@ import static com.ibm.wala.viz.DotUtil.spawnDot;
  */
 public class TestSelection {
 
-    public static final String DOT_EXE = "D:\\Graphviz 2.44.1\\bin\\dot.exe";
-  public final static String DOT_ROOT = "E:\\学习\\自动化测试\\AutomatedTesting2020\\Report\\";
-    public final static String PDF_FILE = "E:\\学习\\自动化测试\\经典大作业\\temp.pdf";
-    public final static String CLASS_TARGET_PATH = "E:\\学习\\自动化测试\\经典大作业\\ClassicAutomatedTesting\\";
-
     public static void main(String[] args) throws IOException, InvalidClassFileException, WalaException, ClassNotFoundException, CancelException {
-        //生成dot的五个项目名字
-        String[] projects = {
-                "1-ALU",
-                "2-DataLog",
-                "3-BinaryHeap",
-                "4-NextDay",
-                "5-MoreTriangle",
-                "0-CMD"
-        };
-        String tmpProject = projects[4];
-        String DOT_FILE = DOT_ROOT+"class-"+"tmp"+".dot";
+        //判断命令行参数是否正确
+        if(args.length!=3){
+            System.out.println(args.length);
+            System.out.println("输入错误。请按照以下格式输入：" +
+                    "java -jar testSelection.jar -c <project_target> <change_info>进行类级别分析" +
+                    "或java -jar testSelection.jar -m <project_target> <change_info>进行方法级别分析");
+            return;
+        }
+        if(!(args[0]).equals("-c") && !(args[0].equals("-m"))){
+            System.out.println("第一个参数错误。请按照以下格式输入：" +
+                    "java -jar testSelection.jar -c <project_target> <change_info>进行类级别分析" +
+                    "或java -jar testSelection.jar -m <project_target> <change_info>进行方法级别分析");
+            return;
+        }
 
         //获取命令行参数
-        String typeCommand = "-c";
-        String PROJECT_PATH = CLASS_TARGET_PATH+tmpProject+"\\target";
-        String changeDir = CLASS_TARGET_PATH+tmpProject+"\\change_info.txt";
+        String typeCommand = args[0];
+        String PROJECT_PATH = args[1];
+        String changeDir = args[2];
         String outDir = "./";
+        String DOT_FILE = "./tmp"+".dot";
         if(typeCommand.equals("-c")){
             outDir += "selection-class.txt";
         }
@@ -65,8 +64,8 @@ public class TestSelection {
     // 生成分析域
     AnalysisScope scope =
         AnalysisScopeReader.readJavaScope(
-            "src\\main\\resources\\scope.txt",
-            new File("src\\main\\resources\\exclusion.txt"),
+            "scope.txt",
+            new File("exclusion.txt"),
             ClassLoader.getSystemClassLoader());
         //读取生产文件与测试文件
         String proRoot = PROJECT_PATH+"\\classes";
@@ -86,6 +85,8 @@ public class TestSelection {
         ArrayList<String> testSignatures = new ArrayList<String>();
         ArrayList<Method> testMethods = new ArrayList<Method>();
         ArrayList<Method> proMethods= new ArrayList<Method>();
+
+        System.out.println("初始化成功，请稍等...");
 
        //单独创建test的层次图，便于后续分离
         for(File clazz:testClass){
@@ -187,6 +188,7 @@ public class TestSelection {
             allMethods.add(method);
         }
 
+        System.out.println("依赖关系分析成功，请稍等...");
 //生成dot文件
         //新建预备输出的唯一依赖信息
         ArrayList<String> outDot = new ArrayList<String>();
@@ -243,15 +245,20 @@ public class TestSelection {
             e.printStackTrace();
         }
 
+        System.out.println("顺利生成依赖关系文件tmp.dot，请查看，后续将选择变更测试文件");
 //读取changeinfo
         BufferedReader bufferedReader = null;
-        ArrayList<String> changeInfos = new ArrayList<>();
-        bufferedReader = new BufferedReader(new FileReader(changeDir));
-        String changeInfo = bufferedReader.readLine();
-        while(changeInfo!=null){
-            changeInfo = changeInfo.split(" ")[1];
-            changeInfos.add(changeInfo);
-            changeInfo = bufferedReader.readLine();
+        ArrayList<String> changeInfos = new ArrayList<String>();
+        try{
+            bufferedReader = new BufferedReader(new FileReader(changeDir));
+            String changeInfo = bufferedReader.readLine();
+            while(changeInfo!=null){
+                changeInfo = changeInfo.split(" ")[1];
+                changeInfos.add(changeInfo);
+                changeInfo = bufferedReader.readLine();
+            }
+        }catch (Exception e){
+            System.out.println("文件不存在");
         }
         //得到输出列表并输出
         ArrayList<String> targetList = searchTestMethod(changeInfos,allMethods,testMethods,testSignatures,typeCommand);
@@ -265,6 +272,7 @@ public class TestSelection {
             nfileOutputStream.write('\n');
         }
         nfileOutputStream.close();
+        System.out.println("恭喜！变更测试文件生成成功，请查看"+outDir);
 
     }
 
@@ -288,8 +296,8 @@ public class TestSelection {
     }
 
     public static ArrayList<String> searchTestMethod(ArrayList<String> changeInfos,ArrayList<Method> allMethods,ArrayList<Method> testMethods,ArrayList<String> testSignatures,String typeCommand){
-        ArrayList<String> targetList = new ArrayList<>();
-        ArrayList<String> changeClasses = new ArrayList<>();
+        ArrayList<String> targetList = new ArrayList<String>();
+        ArrayList<String> changeClasses = new ArrayList<String>();
         String changeInfo = "";
         Method tmpMethod = new Method("","");
         while(changeInfos.size()!=0){

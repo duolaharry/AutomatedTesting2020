@@ -8,7 +8,7 @@ public class Method {
     private final String className;
     private final String signature;
     private final ArrayList<Method> callers = new ArrayList<Method>();
-    private final ArrayList<Method> callees = new ArrayList<>();
+    private final ArrayList<Method> callees = new ArrayList<Method>();
     public Method(String className,String signature){
         this.signature = signature;
         this.className = className;
