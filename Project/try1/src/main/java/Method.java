@@ -7,7 +7,8 @@ import java.util.ArrayList;
 public class Method {
     private final String className;
     private final String signature;
-    private final ArrayList<Method> calls = new ArrayList<Method>();
+    private final ArrayList<Method> callers = new ArrayList<Method>();
+    private final ArrayList<Method> callees = new ArrayList<>();
     public Method(String className,String signature){
         this.signature = signature;
         this.className = className;
@@ -15,10 +16,9 @@ public class Method {
     public String getClassName() {
         return className;
     }
-    public String getSignature() {
-        return signature;
+    public String getSignature() { return signature; }
+    public ArrayList<Method> getCallers() {
+        return callers;
     }
-    public ArrayList<Method> getCalls() {
-        return calls;
-    }
+    public ArrayList<Method> getCallees() { return callees;}
 }

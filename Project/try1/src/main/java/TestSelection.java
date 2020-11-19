@@ -21,6 +21,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 
 import static com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil.dumpCG;
 import static com.ibm.wala.viz.DotUtil.spawnDot;
@@ -37,29 +38,37 @@ public class TestSelection {
     public final static String CLASS_TARGET_PATH = "E:\\学习\\自动化测试\\经典大作业\\ClassicAutomatedTesting\\";
 
     public static void main(String[] args) throws IOException, InvalidClassFileException, WalaException, ClassNotFoundException, CancelException {
-//        System.out.println("Hallo World!");
         //生成dot的五个项目名字
         String[] projects = {
                 "1-ALU",
                 "2-DataLog",
                 "3-BinaryHeap",
                 "4-NextDay",
-                "5-MoreTriangle"
+                "5-MoreTriangle",
+                "0-CMD"
         };
         String tmpProject = projects[4];
-        String DOT_FILE = DOT_ROOT+"method-"+tmpProject+".dot";
-        String PROJECT_PATH = CLASS_TARGET_PATH+tmpProject+"\\target";
+        String DOT_FILE = DOT_ROOT+"class-"+"tmp"+".dot";
 
         //获取命令行参数
-        String typeCommand = "-m";
+        String typeCommand = "-c";
+        String PROJECT_PATH = CLASS_TARGET_PATH+tmpProject+"\\target";
+        String changeDir = CLASS_TARGET_PATH+tmpProject+"\\change_info.txt";
+        String outDir = "./";
+        if(typeCommand.equals("-c")){
+            outDir += "selection-class.txt";
+        }
+        else{
+            outDir += "selection-method.txt";
+        }
 
-        // 生成分析域
-        AnalysisScope scope = AnalysisScopeReader.readJavaScope(
-                "scope.txt",
-                new File("E:\\学习\\自动化测试\\try1\\src\\main\\resources\\exclusion.txt"),
-                ClassLoader.getSystemClassLoader());
+    // 生成分析域
+    AnalysisScope scope =
+        AnalysisScopeReader.readJavaScope(
+            "src\\main\\resources\\scope.txt",
+            new File("src\\main\\resources\\exclusion.txt"),
+            ClassLoader.getSystemClassLoader());
         //读取生产文件与测试文件
-        //String folderPath = CLASS_TARGET_PATH+"\\test-classes\\net\\mooctest";
         String proRoot = PROJECT_PATH+"\\classes";
         ArrayList<File> proClass = new ArrayList<File>();
         int IOExcptionFlag = getFile(proRoot,proClass);
@@ -72,22 +81,6 @@ public class TestSelection {
         if(IOExcptionFlag!=0){
             return;
         }
-//        File file = new File(folderPath);
-//        File clazz;
-//        if(!file.exists()){
-//            System.out.println("路径不存在");
-//        }else{
-//            File[] files = file.listFiles();
-//            for(File f:files){
-//                clazz = new FileProvider().getFile(folderPath+"\\"+f.getName());
-//                scope.addClassFileToScope(ClassLoaderReference.Application, clazz);
-//            }
-//        }
-//
-//        clazz = new FileProvider().getFile("E:\\学习\\自动化测试\\经典大作业\\ClassicAutomatedTesting\\1-ALU\\target\\classes\\net\\mooctest\\ALU.class");
-//        scope.addClassFileToScope(ClassLoaderReference.Application, clazz);
-        // File exFile=new FileProvider().getFile("exclusion.txt");
-        //AnalysisScope scope = AnalysisScopeReader.makeJavaBinaryAnalysisScope("zookeeper-3.3.6.jar", exFile);
 
         //初始化测试类签名列表、生产方法列表和测试方法列表
         ArrayList<String> testSignatures = new ArrayList<String>();
@@ -156,31 +149,35 @@ public class TestSelection {
                         String callMethodSignature = callSiteReference.getDeclaredTarget().getSignature();
                         String callClassName = callSiteReference.getDeclaredTarget().getDeclaringClass().getName().toString();
                         callClassName = callClassName.split("\\$")[0];
-                        method.getCalls().add(new Method(callClassName,callMethodSignature));
+                        if(callClassName.charAt(1) == classInnerName.charAt(1)){
+                            method.getCallers().add(new Method(callClassName,callMethodSignature));
+                        }
                     }
-                    if(testSignatures.contains(signature)){
-                        testMethods.add(method);
+                    Iterator preNodes = cg.getPredNodes(node);
+                    for (Iterator it = preNodes; it.hasNext(); ) {
+                        CGNode preNode = (CGNode)it.next();
+                        if(preNode.getMethod() instanceof ShrikeBTMethod){
+                            ShrikeBTMethod preShrikeBTMethod = (ShrikeBTMethod) preNode.getMethod();
+                            if("Application".equals(preShrikeBTMethod.getDeclaringClass().getClassLoader().toString())) {
+                                String preClassInnerName = preShrikeBTMethod.getDeclaringClass().getName().toString();
+                                String preSignature = preShrikeBTMethod.getSignature();
+                                Method preMethod = new Method(preClassInnerName,preSignature);
+                                method.getCallees().add(preMethod);
+                            }
+                        }
                     }
-                    else{
-                        proMethods.add(method);
+                        if(testSignatures.contains(signature)){
+                            if(method.getCallees().size()!=0||method.getCallers().size()!=0){
+                                testMethods.add(method);
+                            }
+                        }
+                        else{
+                            proMethods.add(method);
+                        }
                     }
                 }
             }
-        }
 
-//        调试方法
-//        for(Method method:proMethods){
-//            System.out.println(method.getClassName());
-//            System.out.println(method.getSignature());
-//        }
-//        for(Method method:testMethods){
-//            System.out.println(method.getClassName());
-//            System.out.println(method.getSignature());
-//        }
-//        System.out.println(CallGraphStats.getStats(cg));
-//        dotify(cg, null, "tmp.dot",DOT_FILE, null, DOT_EXE);
-
-//生成dot文件
         //收集所有methods便于遍历
         ArrayList<Method> allMethods = new ArrayList<Method>();
         for(Method method:proMethods){
@@ -189,13 +186,19 @@ public class TestSelection {
         for(Method method:testMethods){
             allMethods.add(method);
         }
+
+//生成dot文件
         //新建预备输出的唯一依赖信息
         ArrayList<String> outDot = new ArrayList<String>();
         File file = new File(DOT_FILE);
         FileOutputStream fileOutputStream = null;
         String tmpOutput = "";
+        String callDotSignature = "";
+        String dotSignature = "";
+        String callDotClassName = "";
+        String dotClassName = "";
         try {
-            fileOutputStream = new FileOutputStream(file,true);
+            fileOutputStream = new FileOutputStream(file,false);
             if(typeCommand.equals("-m")){
                 tmpOutput = "digraph _method {\n";
                 for(int i=0;i<tmpOutput.length();i++){
@@ -209,25 +212,21 @@ public class TestSelection {
                 }
             }
             for (Method method : allMethods) {
-                for (Method callMethod:method.getCalls()) {
+                for (Method callMethod:method.getCallers()) {
                     if(typeCommand.equals("-m")) {
-                        String callDotSignature = callMethod.getSignature();
-                        String dotSignature = method.getSignature();
-                        if (callDotSignature.charAt(0) == dotSignature.charAt(0)) {
-                            tmpOutput = "\"" + callDotSignature + "\"" + " " + "->" + " " + "\"" + dotSignature + "\"" + ";\n";
-                            if (!outDot.contains(tmpOutput)) {
-                                outDot.add(tmpOutput);
-                            }
+                        callDotSignature = callMethod.getSignature();
+                        dotSignature = method.getSignature();
+                        tmpOutput = "\"" + callDotSignature + "\"" + " " + "->" + " " + "\"" + dotSignature + "\"" + ";\n";
+                        if (!outDot.contains(tmpOutput)) {
+                            outDot.add(tmpOutput);
                         }
                     }
                     else if(typeCommand.equals("-c")){
-                        String callDotClassName = callMethod.getClassName();
-                        String dotClassName = method.getClassName();
-                        if (callDotClassName.charAt(1) == dotClassName.charAt(1)) {
-                            tmpOutput = "\"" + callDotClassName + "\"" + " " + "->" + " " + "\"" + dotClassName + "\"" + ";\n";
-                            if(!outDot.contains(tmpOutput)) {
-                                outDot.add(tmpOutput);
-                            }
+                        callDotClassName = callMethod.getClassName();
+                        dotClassName = method.getClassName();
+                        tmpOutput = "\"" + callDotClassName + "\"" + " " + "->" + " " + "\"" + dotClassName + "\"" + ";\n";
+                        if(!outDot.contains(tmpOutput)) {
+                            outDot.add(tmpOutput);
                         }
                     }
                 }
@@ -244,17 +243,29 @@ public class TestSelection {
             e.printStackTrace();
         }
 
-    }
+//读取changeinfo
+        BufferedReader bufferedReader = null;
+        ArrayList<String> changeInfos = new ArrayList<>();
+        bufferedReader = new BufferedReader(new FileReader(changeDir));
+        String changeInfo = bufferedReader.readLine();
+        while(changeInfo!=null){
+            changeInfo = changeInfo.split(" ")[1];
+            changeInfos.add(changeInfo);
+            changeInfo = bufferedReader.readLine();
+        }
+        //得到输出列表并输出
+        ArrayList<String> targetList = searchTestMethod(changeInfos,allMethods,testMethods,testSignatures,typeCommand);
+        File nfile = new File(outDir);
+        FileOutputStream nfileOutputStream = null;
+        nfileOutputStream = new FileOutputStream(nfile,false);
+        for(String outString:targetList){
+            for(int i=0;i<outString.length();i++){
+                nfileOutputStream.write(outString.charAt(i));
+            }
+            nfileOutputStream.write('\n');
+        }
+        nfileOutputStream.close();
 
-    public static <T> void dotify(Graph<T> g, NodeDecorator<T> labels, String title, String dotFile, String outputFile, String dotExe)
-            throws WalaException {
-        if (g == null) {
-            throw new IllegalArgumentException("g is null");
-        }
-        File f = DotUtil.writeDotFile(g, labels, title, dotFile);
-        if (dotExe != null && outputFile != null) { //如果输出pdf不为空，那么输出pdf文件
-            spawnDot(dotExe, outputFile, f);
-        }
     }
 
     public static int getFile(String dir,ArrayList<File> classes) {
@@ -275,6 +286,56 @@ public class TestSelection {
         }
         return 0;
     }
+
+    public static ArrayList<String> searchTestMethod(ArrayList<String> changeInfos,ArrayList<Method> allMethods,ArrayList<Method> testMethods,ArrayList<String> testSignatures,String typeCommand){
+        ArrayList<String> targetList = new ArrayList<>();
+        ArrayList<String> changeClasses = new ArrayList<>();
+        String changeInfo = "";
+        Method tmpMethod = new Method("","");
+        while(changeInfos.size()!=0){
+            changeInfo = changeInfos.remove(0);
+            for(Method method:allMethods){
+                if(changeInfo.equals(method.getSignature())){
+                    tmpMethod = method;
+                    if(!changeClasses.contains(tmpMethod.getClassName())){
+                        changeClasses.add(tmpMethod.getClassName());
+                    }
+                    if(tmpMethod.getCallees().size()!=0){
+                        for(Method tmpChangeInfo:tmpMethod.getCallees()){
+                            if(!changeInfos.contains(tmpChangeInfo.getSignature())){
+                                changeInfos.add(tmpChangeInfo.getSignature());
+                            }
+                        }
+                    }
+                    if( (testSignatures.contains(tmpMethod.getSignature())) && (!targetList.contains(tmpMethod.getClassName()+' '+tmpMethod.getSignature())) ){
+                        targetList.add(tmpMethod.getClassName()+' '+tmpMethod.getSignature());
+                    }
+                    break;
+                }
+            }
+        }
+        if(typeCommand.equals("-m")){
+            Collections.sort(targetList);
+            return targetList;
+        }
+        String changeClass = "";
+        while(changeClasses.size()!=0){
+            changeClass = changeClasses.remove(0);
+            for(Method tempMethod:testMethods){
+                if(tempMethod.getCallers().size()!=0){
+                    for(Method method:tempMethod.getCallers()){
+                        if( (method.getClassName().equals(changeClass)) && (!targetList.contains(tempMethod.getClassName()+' '+tempMethod.getSignature())) ){
+                            targetList.add(tempMethod.getClassName()+' '+tempMethod.getSignature());
+                        }
+                    }
+                }
+            }
+        }
+        Collections.sort(targetList);
+        return targetList;
+    }
+
+
 
 
 }
